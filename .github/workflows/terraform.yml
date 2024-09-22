@@ -10,9 +10,22 @@ jobs:
   terraform:
     name: 'Terraform'
     runs-on: ubuntu-latest
+    
+    # Add permissions for OIDC
+    permissions:
+      id-token: write
+      contents: read
+
     steps:
     - name: Checkout
       uses: actions/checkout@v2
+
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-west-2  # Replace with your AWS region
 
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v1
