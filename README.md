@@ -109,9 +109,6 @@ Key variables can be provided through `terraform.tfvars` or entered during `terr
 ```hcl
 db_password          = "your_rds_db_password"
 cloudflare_api_token = "your_cloudflare_api_token"
-ami_id               = "your_ami_id"
-ecr_registry         = "your_ecr_registry_url"
-ecr_repository       = "your_ecr_repository_name"
 ```
 
 ---
