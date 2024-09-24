@@ -1,6 +1,4 @@
-Here is a polished **README** formatted for your project:
 
----
 
 # PetClinic Infrastructure Setup with Terraform
 
