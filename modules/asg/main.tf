@@ -1,4 +1,3 @@
-# Create a Launch Template for ASG
 resource "aws_launch_template" "asg_launch_template" {
   name_prefix           = "${var.name}-launch-template"
   image_id              = var.ami_id
@@ -16,23 +15,22 @@ resource "aws_launch_template" "asg_launch_template" {
 set -e
 
 # Export environment variables for RDS connection
-export DB_HOST="petclinic-db-instance-1.czossoccmebo.us-east-1.rds.amazonaws.com"
+export DB_HOST="${var.db_host}"
 export DB_PORT="5432"
 export DB_NAME="petclinicdb"
 export DB_USERNAME="petadmin"
-export DB_PASSWORD="petadmin"
+export DB_PASSWORD="${var.db_password}"
 
 # Update the system and install Docker and other dependencies
-sudo apt update && sudo apt install -y --no-install-recommends docker.io curl unzip
+sudo apt update && sudo apt install -y --no-install-recommends curl unzip
 
 # Install AWS CLI v2
 sudo curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
 sudo unzip awscliv2.zip
 sudo ./aws/install
 
-# Start Docker and enable it to run on startup
-sudo sudo systemctl start docker
-sudo systemctl enable docker
+# Ensure Docker service is running
+sudo systemctl start docker
 
 # Log in to Amazon ECR
 sudo aws ecr get-login-password --region ${var.region} | docker login --username AWS --password-stdin ${var.ecr_registry}
@@ -40,17 +38,46 @@ sudo aws ecr get-login-password --region ${var.region} | docker login --username
 # Pull the Docker image from ECR and run it on port 8080
 sudo docker pull ${var.ecr_registry}/${var.ecr_repository}:latest
 sudo docker run -d -p 8080:8080 \
+  -e SPRING_PROFILES_ACTIVE=postgres \
   -e DB_HOST=$DB_HOST \
   -e DB_NAME=$DB_NAME \
   -e DB_USERNAME=$DB_USERNAME \
   -e DB_PASSWORD=$DB_PASSWORD \
   ${var.ecr_registry}/${var.ecr_repository}:latest
-  
-# Clean up
-sudo rm -rf aws awscliv2.zip
+
+# CloudWatch Logs configuration
+cat <<'EOCONF' > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+{
+  "logs": {
+    "logs_collected": {
+      "files": {
+        "collect_list": [
+          {
+            "file_path": "/var/log/docker.log",
+            "log_group_name": "/aws/petclinic-app",
+            "log_stream_name": "{instance_id}/docker.log",
+            "timestamp_format": "%Y-%m-%d %H:%M:%S"
+          },
+          {
+            "file_path": "/var/log/petclinic-app.log",
+            "log_group_name": "/aws/petclinic-app",
+            "log_stream_name": "{instance_id}/petclinic.log",
+            "timestamp_format": "%Y-%m-%d %H:%M:%S"
+          }
+        ]
+      }
+    }
+  }
+}
+EOCONF
+
+# Start CloudWatch Agent
+sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
+
 EOF
 )
 }
+
 
 # Create Auto Scaling Group
 resource "aws_autoscaling_group" "asg" {
@@ -98,6 +125,19 @@ resource "aws_security_group" "asg_sg" {
   }
 }
 
+resource "aws_cloudwatch_log_group" "petclinic_log_group" {
+  name              = "/aws/petclinic-app"
+  retention_in_days = 7
+  tags = {
+    Name = "petclinic-log-group"
+  }
+}
+
+
+resource "aws_iam_role_policy_attachment" "cloudwatch_policy" {
+  role       = aws_iam_role.ec2_instance_role.name
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+}
 
 
 # Declare the IAM Role
