@@ -3,7 +3,7 @@ resource "aws_lb" "public_lb" {
   name               = var.name
   internal           = false
   load_balancer_type = "application"
-  security_groups    = [var.security_group_id]
+  security_groups    = [aws_security_group.lb_sg.id]  # Reference the correct SG
   subnets            = var.public_subnets
 
   tags = {
@@ -11,22 +11,10 @@ resource "aws_lb" "public_lb" {
   }
 }
 
-# Listener for Load Balancer (HTTP)
-resource "aws_lb_listener" "http" {
-  load_balancer_arn = aws_lb.public_lb.arn
-  port              = 8080
-  protocol          = "HTTP"
-
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.main.arn
-  }
-}
-
 # Target Group for Load Balancer
 resource "aws_lb_target_group" "main" {
   name        = var.target_group_name
-  port        = 8080
+  port        = 8080  # Forwarding to port 8080 (HTTP traffic internally)
   protocol    = "HTTP"
   vpc_id      = var.vpc_id
   target_type = "instance"
@@ -44,15 +32,27 @@ resource "aws_lb_target_group" "main" {
   }
 }
 
+# Listener for HTTP Traffic
+resource "aws_lb_listener" "http" {
+  load_balancer_arn = aws_lb.public_lb.arn
+  port              = 80
+  protocol          = "HTTP"
 
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.main.arn
+  }
+}
+
+# Security Group for Load Balancer
 resource "aws_security_group" "lb_sg" {
   name        = "${var.name}-lb-sg"
   description = "Allow HTTP traffic to the Load Balancer"
   vpc_id      = var.vpc_id
 
   ingress {
-    from_port   = 8080
-    to_port     = 8080
+    from_port   = 80
+    to_port     = 80
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }

@@ -63,3 +63,16 @@ variable "vpc_id" {
   description = "The VPC ID for the ASG security group"
   type        = string
 }
+
+# Declare the DB Host
+variable "db_host" {
+  description = "The RDS database hostname"
+  type        = string
+}
+
+# Declare the DB Password
+variable "db_password" {
+  description = "The database master password"
+  type        = string
+  sensitive   = true
+}
